@@ -1,0 +1,13 @@
+*
+!*.*
+!*/
+*.swp
+# ignore ppm files
+*.ppm
+*.zip
+*.pro
+*.user
+*.autosave
+*.user.*
+
+
