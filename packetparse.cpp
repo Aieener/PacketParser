@@ -24,7 +24,7 @@
 #include <vector>
 #include <array>
 #include <iostream>
-
+#include <algorithm>
 
 ///-----------------------
 // part 1: Due 4/3/17
@@ -71,7 +71,9 @@ void PrintData (const u_char * data , int Size);
 
 
 
-void get_tcpconnectinfo(const struct pcap_pkthdr header,const u_char *packet,unsigned int* sip, unsigned int* dip, unsigned int *s_port, unsigned int *d_port,unsigned long *sequence, unsigned long *ack_seq,unsigned int *ack,unsigned int *syn,unsigned int *fin,unsigned int *TCPsize);
+//void get_tcpconnectinfo(const struct pcap_pkthdr header,const u_char *packet,unsigned int* sip, unsigned int* dip, unsigned int *s_port, unsigned int *d_port,unsigned long *sequence, unsigned long *ack_seq,unsigned int *ack,unsigned int *syn,unsigned int *fin,unsigned int *TCPsize);
+
+void get_tcpconnectinfo(const struct pcap_pkthdr header,const u_char *packet,unsigned long* sip, unsigned long* dip, unsigned long *s_port, unsigned long *d_port,unsigned long *sequence, unsigned long *ack_seq,unsigned long *ack,unsigned long *syn,unsigned long *fin,unsigned long *TCPsize);
 
 void write_meta(unsigned int idx,unsigned int sip, unsigned int dip, unsigned int s_port, unsigned int d_port);
 
@@ -129,30 +131,31 @@ int main(int argc, char *argv[] )
     // -------------------Part 2 ---------------------------
     if(argc ==3 && !strcmp(argv[2],"-t")){
         //source ip source port, dest ip and dest port uniquely define a TCP connection
-        unsigned int sip;
-        unsigned int dip;
-        unsigned int s_port;
-        unsigned int d_port;
+        unsigned long sip;
+        unsigned long dip;
+        unsigned long s_port;
+        unsigned long d_port;
         unsigned long sequence;
         unsigned long ack_seq;
-        unsigned int ack;
-        unsigned int syn;
-        unsigned int fin;
-        unsigned int TCPsize;
+        unsigned long ack;
+        unsigned long syn;
+        unsigned long fin;
+        unsigned long TCPsize;
 
-        std::vector <std::array<unsigned int,11> > connec_list; //store each connection
+        std::vector <std::array<unsigned long,11> > connec_list; //store each connection
         // the structure of connection:[initiator_ip;responder_ip;initiator_port; responder_port;
         // num_sent_by_i; num_sent_by_r;num_byte_sent_by_i;num_byte_sent_by_r;num_ofdul_i; num_ofdul_r;
         // closed]
         
-        std::vector<std::array<unsigned int,10> > packetinfo_list; // a list to store the infomation
+        std::vector<std::array<unsigned long,11> > init_packetinfo_list; // a list to store the infomation
+        std::vector<std::array<unsigned long,11> > resp_packetinfo_list; // a list to store the infomation
         // the sequence number and ack_seq will be relative number
-        // stucture for each packet:[sip,dip,s_port,s_port,sequence, ack_seq,ack,syn,fin,tcpsize];
+        // stucture for each packet:[sip,dip,s_port,s_port,sequence, ack_seq,ack,syn,fin,tcpsize,packet_number];
 
-        int packet_counter = 1;
+        unsigned long packet_counter = 1;
         
-        unsigned int sip_ref;
-        unsigned int dip_ref;
+        unsigned long sip_ref;
+        unsigned long dip_ref;
         unsigned long seq_ref = 0;
         unsigned long ack_ref = 0;
         while((packet = pcap_next(pf, &header)) != NULL){
@@ -162,16 +165,12 @@ int main(int argc, char *argv[] )
             // since we only cares about tcp connections:
         
             if(ip->protocol == IPPROTO_TCP){
-                printf("----------------------------------\n");
-                printf("Packet number: %d\n",packet_counter);
-                printf("----------------------------------\n");
-
                 // first, parse metadata and figure out how many connections
                 get_tcpconnectinfo(header,packet,&sip,&dip,&s_port,&d_port,&sequence,&ack_seq,&ack,&syn,&fin,&TCPsize);
 
                 //------------------------- compute relative seq_number and ack_number --------------------------
-                unsigned int seq_relative = 0; 
-                unsigned int ack_relative = 0; 
+                unsigned long seq_relative = 0; 
+                unsigned long ack_relative = 0; 
                 if(ack ==0 && syn ==1){
                     seq_ref = sequence;
                     sip_ref = sip;
@@ -185,34 +184,43 @@ int main(int argc, char *argv[] )
                 if(sip ==sip_ref){
                     seq_relative = sequence - seq_ref;
                     ack_relative = ack_seq - ack_ref;
+
+                    std::array<unsigned long, 11> init_packet = {{sip,dip,s_port,d_port,seq_relative,ack_relative,ack,syn,fin,TCPsize,packet_counter}};
+                    init_packetinfo_list.push_back(init_packet);
                 }
 
                 else if(sip == dip_ref){
                     seq_relative = sequence - ack_ref;
                     ack_relative = ack_seq - seq_ref;
+
+                    std::array<unsigned long, 11> resp_packet = {{sip,dip,s_port,d_port,seq_relative,ack_relative,ack,syn,fin,TCPsize,packet_counter}};
+                    resp_packetinfo_list.push_back(resp_packet);
                 }
                 //--------------------finish compute relative seq_number and ack_number --------------------------
                 
-                std::array<unsigned int, 10> currpacket = {{sip,dip,s_port,d_port,seq_relative,ack_relative,ack,syn,fin,TCPsize}};
-                packetinfo_list.push_back(currpacket);
 
                 bool new_connection = true;
+/*                if(sip == sip_ref){*/
+                    //printf("----------------------------------\n");
+                    //printf("Packet number: %lu\n",packet_counter);
+                    //printf("----------------------------------\n");
 
-                printf("Initiator IP address  :%d.%d.%d.%d\n",sip&0xFF,(sip>>8)&0xFF,
-                        (sip>>16)&0xFF,(sip>>24)&0xFF);
-                printf("Initiator port    :%d\n", s_port);
-                printf("Responder IP address  :%d.%d.%d.%d\n",dip&0xFF,(dip>>8)&0xFF,
-                        (dip>>16)&0xFF,(dip>>24)&0xFF);
-                printf("Responder port    :%d\n", d_port);
-                printf("TCP segment Len   :%d\n", TCPsize);
-                //printf("Sequence number    :%lu\n", sequence);
-                printf("Sequence number (relative)    :%d\n", seq_relative);
-                //printf("Ack number         :%lu\n", ack_seq);
-                printf("Ack number (relative)         :%d\n", ack_relative);
-                printf("Ack         :%d\n", ack);
-                printf("Syn         :%d\n", syn);
-                printf("Fin         :%d\n", fin);
+                    //printf("Initiator IP address  :%lu.%lu.%lu.%lu\n",sip&0xFF,(sip>>8)&0xFF,
+                            //(sip>>16)&0xFF,(sip>>24)&0xFF);
+                    //printf("Initiator port    :%lu\n", s_port);
+                    //printf("Responder IP address  :%lu.%lu.%lu.%lu\n",dip&0xFF,(dip>>8)&0xFF,
+                            //(dip>>16)&0xFF,(dip>>24)&0xFF);
+                    //printf("Responder port    :%lu\n", d_port);
+                    //printf("TCP segment Len   :%lu\n", TCPsize);
+                    //printf("Sequence number    :%lu\n", sequence);
+                    //printf("Sequence number (relative)    :%lu\n", seq_relative);
+                    //printf("Ack number         :%lu\n", ack_seq);
+                    //printf("Ack number (relative)         :%lu\n", ack_relative);
+                    //printf("Ack         :%lu\n", ack);
+                    //printf("Syn         :%lu\n", syn);
+                    //printf("Fin         :%lu\n", fin);
 
+                /*}*/
                 for(int i = 0; i<connec_list.size();i++){
                     // source ip, dest ip, source port and dest port uniquely defines a connection
                     // check if this packet's identity matches wish any exist connection
@@ -240,7 +248,7 @@ int main(int argc, char *argv[] )
                     // the structure of connection:[initiator_ip;responder_ip;initiator_port; responder_port;
                     // num_sent_by_i; num_sent_by_r;num_byte_sent_by_i;num_byte_sent_by_r;num_ofdul_i; num_ofdul_r;
                     // closed]
-                    std::array<unsigned int, 11> connect = {{sip,dip,s_port,d_port,1,0,1,0,0,0,0}};
+                    std::array<unsigned long, 11> connect = {{sip,dip,s_port,d_port,1,0,1,0,0,0,0}};
                     connec_list.push_back(connect);
                 }
 
@@ -254,6 +262,65 @@ int main(int argc, char *argv[] )
             /** struct metadata m; */
             /** write_meta(i,sip,dip,s_port,d_port); */
         /** } */
+
+        // ------------------------------Sort the paket by sequence number--------------------------------------------
+        //sorry it's bubble sort....
+        std::array<unsigned long, 11> temp;
+        for(int c = 0; c<init_packetinfo_list.size() -1;c++){
+            for(int d = 0; d< init_packetinfo_list.size()-c-1;d++){
+                if(init_packetinfo_list[d][4]>init_packetinfo_list[d+1][4]){
+
+                    temp = init_packetinfo_list[d];
+                    init_packetinfo_list[d] = init_packetinfo_list[d+1];
+                    init_packetinfo_list[d+1] = temp;
+                }
+            }
+        }
+
+        for(int c = 0; c<resp_packetinfo_list.size() -1;c++){
+            for(int d = 0; d< resp_packetinfo_list.size()-c-1;d++){
+                if(resp_packetinfo_list[d][4]>resp_packetinfo_list[d+1][4]){
+
+                    temp = resp_packetinfo_list[d];
+                    resp_packetinfo_list[d] = resp_packetinfo_list[d+1];
+                    resp_packetinfo_list[d+1] = temp;
+                }
+            }
+        }
+
+        // ------------------------------ Finish sorting the packet --------------------------------------------------
+
+        for(int i = 0; i<init_packetinfo_list.size();i++){
+
+        // stucture for each packet:[sip,dip,s_port,s_port,sequence, ack_seq,ack,syn,fin,tcpsize,packet_number];
+            printf("----------------------------------\n");
+            printf("Packet number: %lu\n",init_packetinfo_list[i][10]);
+            printf("----------------------------------\n");
+            unsigned long tsip = init_packetinfo_list[i][0];
+            unsigned long tdip = init_packetinfo_list[i][1];
+            unsigned long ts_port=init_packetinfo_list[i][2];
+            unsigned long td_port=init_packetinfo_list[i][3];
+            unsigned long tseq_relative=init_packetinfo_list[i][4];
+            unsigned long tack_relative=init_packetinfo_list[i][5];
+            unsigned long tack=init_packetinfo_list[i][6];
+            unsigned long tsyn=init_packetinfo_list[i][7];
+            unsigned long tfin=init_packetinfo_list[i][8];
+            unsigned long tTCPsize=init_packetinfo_list[i][9];
+
+
+            printf("Initiator IP address  :%lu.%lu.%lu.%lu\n",tsip&0xFF,(tsip>>8)&0xFF,
+                    (tsip>>16)&0xFF,(tsip>>24)&0xFF);
+            printf("Initiator port    :%lu\n", ts_port);
+            printf("Responder IP address  :%lu.%lu.%lu.%lu\n",tdip&0xFF,(tdip>>8)&0xFF,
+                    (tdip>>16)&0xFF,(tdip>>24)&0xFF);
+            printf("Responder port    :%lu\n", td_port);
+            printf("TCP segment Len   :%lu\n", tTCPsize);
+            printf("Sequence number (relative)    :%lu\n", tseq_relative);
+            printf("Ack number (relative)         :%lu\n", tack_relative);
+            printf("Ack         :%lu\n", tack);
+            printf("Syn         :%lu\n", tsyn);
+            printf("Fin         :%lu\n", tfin);
+        }
         printf("num of connection = %lu", connec_list.size());
         // std::cout<< "asdasc;ojao;dfij"<<std::endl;
     }
@@ -296,8 +363,8 @@ void write_meta(unsigned int idx,unsigned int sip, unsigned int dip, unsigned in
 }
 
 
-void get_tcpconnectinfo(const struct pcap_pkthdr header,const u_char *packet,unsigned int* sip, unsigned int* dip, unsigned int *s_port, unsigned int *d_port,unsigned long *sequence, unsigned long *ack_seq,unsigned int *ack,unsigned int *syn,unsigned int *fin,unsigned int *TCPsize){
 
+void get_tcpconnectinfo(const struct pcap_pkthdr header,const u_char *packet,unsigned long* sip, unsigned long* dip, unsigned long *s_port, unsigned long *d_port,unsigned long *sequence, unsigned long *ack_seq,unsigned long *ack,unsigned long *syn,unsigned long *fin,unsigned long *TCPsize){
     int size = header.len;
     struct iphdr *iph = (struct iphdr *)(packet + sizeof(struct ethhdr));
     int iphdrlen = iph ->ihl*4; // the length of ip header
