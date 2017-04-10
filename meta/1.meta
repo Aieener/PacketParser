@@ -1,8 +1,8 @@
-Initiator IP address  :192.168.3.131
-Initiator port    :57011
-Responder IP address  :72.14.213.138
-Responder port    :80
-Number of packets sent by initiator    :4695
-Number of packets sent by responder    :4045
-Number of byte sent by initiator    :31105429
-Number of byte sent by responder    :28418408
+Initiator IP address  :10.10.1.4
+Initiator port    :1470
+Responder IP address  :74.53.140.153
+Responder port    :25
+Number of packets sent by initiator    :28
+Number of packets sent by responder    :25
+Number of byte sent by initiator    :831
+Number of byte sent by responder    :823
