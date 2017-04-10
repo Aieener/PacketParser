@@ -1,8 +1,0 @@
-Initiator IP address  :10.0.2.15
-Initiator port    :1095
-Responder IP address  :192.168.3.90
-Responder port    :139
-Number of packets sent by initiator    :35865
-Number of packets sent by responder    :53310
-Number of byte sent by initiator    :269046430
-Number of byte sent by responder    :407359080
