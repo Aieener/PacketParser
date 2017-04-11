@@ -134,6 +134,11 @@ int main(int argc, char *argv[] )
     }
 
     // -------------------Part 2 ---------------------------
+    // Sorry that I pretty much screwed up with my coding style 
+    // at this part, hopefully I could get a more organized 
+    // structure in next part.
+    // -----------------------------------------------------
+    
     if(argc ==3 && !strcmp(argv[2],"-t")){
         //source ip source port, dest ip and dest port uniquely define a TCP connection
         unsigned long sip;
@@ -204,8 +209,6 @@ int main(int argc, char *argv[] )
                     sip_reflist.push_back(sip);
                     dip_ref = dip;
                     dip_reflist.push_back(dip);
-                    //connection_count++;
-                    //----------------------
                     seq_relative = sequence - seq_ref;
                     ack_relative = ack_seq - ack_ref;
                     std::array<unsigned long, 14> init_packet = {{sip,dip,s_port,d_port,seq_relative,ack_relative,
@@ -238,7 +241,6 @@ int main(int argc, char *argv[] )
                             ack,syn,fin,TCPsize,packet_counter,rst,Payload_size,Total_size}};
                         resp_packetinfo_list.push_back(resp_packet);
                     }
-
                 }
 
                 //--------------------finish compute relative seq_number and ack_number --------------------------
@@ -307,19 +309,15 @@ int main(int argc, char *argv[] )
             }
         }
         // ------------------------------ Finish sorting the packet --------------------------------------------------
+        
         //--------------print info to terminal------------------
         //printconnectinfo(init_packetinfo_list);
         printconnectinfo(resp_packetinfo_list);
         //--------------print info to terminal------------------
         
         // ------------------- Remove the duplicate packet and drop the ones are not ACKed ---------------------------
-        //std::array<unsigned long, 14> init_packet = {{sip,dip,s_port,d_port,seq_relative,ack_relative,
-            //ack,syn,fin,TCPsize,packet_counter,rst,Payload_size,Total_size}};
-            //
         remodul_init_packet_list = init_packetinfo_list;
         remodul_resp_packet_list = resp_packetinfo_list;
-
-
 
         // drop the dulpicated packet in initiator direction
         int idropnum= 0;
@@ -339,15 +337,12 @@ int main(int argc, char *argv[] )
                     // To get ACKed, (tcplenini + seqini = ackrep  && ackini = seqrep )has to hold at somewhere
                     unsigned long seqrep = resp_packetinfo_list[j][4];
                     unsigned long ackrep = resp_packetinfo_list[j][5];
-                    //std::cout<<tcplenini+ seqini <<" vs "<<ackrep<<"\n";
-                    //std::cout<<ackini <<" vs "<<seqrep<<"\n";
+
                     if(tcplenini+ seqini == ackrep && ackini ==seqrep){
                         ACKed = true;
                     }
                 }
             }
-
-            //std::cout<<ackini <<" ------------------- "<<seqini<<"\n";
 
             if(!ACKed){
                 //drop that packet because it is not ACKed, hence a duplicate
@@ -355,9 +350,39 @@ int main(int argc, char *argv[] )
                 idropnum++;
             }
         }
-        std::cout<<remodul_init_packet_list.size()<<std::endl;
+        // drop the dulpicated packet in responser direction
+        int rdropnum= 0;
+        for(int i = 0; i<resp_packetinfo_list.size();i++){
+            unsigned long seqrsp  =resp_packetinfo_list[i][4];
+            unsigned long ackrsp  =resp_packetinfo_list[i][5];
+            unsigned long tcplenrsp  =resp_packetinfo_list[i][9];
 
-        // ------------------- Remove the duplicate packet and drop the ones are not ACKed ---------------------------
+            unsigned long ack = resp_packetinfo_list[i][6];
+            unsigned long syn = resp_packetinfo_list[i][7];
+            unsigned long fin = resp_packetinfo_list[i][8];
+            bool ACKed = false;
+
+            if(ack ==1 &&syn== 0 &&fin ==0){ // make sure it is the packet in between connection
+                for(int j = 0; j<resp_packetinfo_list.size();j++){
+
+                    // To get ACKed, (tcplenrsp+ seqrsp == ackini && ackrsp ==seqini)has to hold at somewhere
+                    unsigned long seqini = init_packetinfo_list[j][4];
+                    unsigned long ackini = init_packetinfo_list[j][5];
+
+                    if(tcplenrsp+ seqrsp == ackini && ackrsp ==seqini){
+                        ACKed = true;
+                    }
+                }
+            }
+
+            if(!ACKed){
+                //drop that packet because it is not ACKed, hence a duplicate
+                remodul_resp_packet_list.erase(remodul_resp_packet_list.begin()+i-rdropnum);
+                rdropnum++;
+            }
+        }
+
+        // ---------- Finishing Remove the duplicate packet and drop the ones are not ACKed ---------------------------
 
 
         printf("num of connection = %lu", connec_list.size());
@@ -368,7 +393,9 @@ int main(int argc, char *argv[] )
     
         std::cout<<"total connection = "<<connection_count<<"  "<<connec_list.size();
 
+        //=====================================================================
         //--------------------write initiator----------------------------------
+        //=====================================================================
         char extention[11]= ".initiator";
         char *filename = (char *) malloc(1+strlen(extention)+sizeof(unsigned int));
         sprintf(filename,"initiator/%d%s",1,extention);
@@ -383,7 +410,6 @@ int main(int argc, char *argv[] )
             fprintf( stderr, "Can't process pcap file %s: %s\n", argv[1], errbuf );
             exit(1);
         }
-
 
         int k = 1;
         while((packet = pcap_next(pf, &header)) != NULL){
