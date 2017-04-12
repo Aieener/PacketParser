@@ -507,7 +507,7 @@ int main(int argc, char *argv[] )
             idropnum_list.push_back(idropnum);
             iclosed_list.push_back(closed);
             std::cout<<g+1<<"th "<<"initiator has "<<idropnum<<" duplicated packet to drop"<<std::endl;
-            std::cout<<"closed "<<closed<<std::endl;
+            std::cout<<g+1<<"th "<<"initiator closed?  "<<closed<<std::endl;
         }
         // drop the dulpicated packet in responser direction
         
@@ -600,7 +600,7 @@ int main(int argc, char *argv[] )
             rdropnum_list.push_back(rdropnum);
             rclosed_list.push_back(closed);
             std::cout<<g+1<<"th "<<"responder has "<<rdropnum<<" duplicated packet to drop"<<std::endl;
-            std::cout<<"closed "<<closed<<std::endl;
+            std::cout<<g+1<<"th "<<"responder closed?  "<<closed<<std::endl;
         }
 
         //// ---------- Finishing Remove the duplicate packet and drop the ones are not ACKed ---------------------------
