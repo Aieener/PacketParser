@@ -67,15 +67,12 @@ void print_ip_header(const u_char*);
 void print_tcp_packet(const u_char*,int );
 void print_udp_packet(const u_char*,int );
 void PrintData (const u_char * data , int Size);
-/** void get_tcpconnectinfo(const u_char *packet, char *sip, char *dip, unsigned int s_port, unsigned int d_port); */
 
 void analyconnection(std::array<unsigned long, 11> &connect,const std::vector<std::array<unsigned long,14> > init_packetinfo_list,
-        const std::vector<std::array<unsigned long,14> > resp_packetinfo_list);
+        const std::vector<std::array<unsigned long,14> > resp_packetinfo_list,int idropnum,int rdropnum,int closed);
+
 
 void printconnectinfo(const std::vector<std::array<unsigned long,14> > packetinfolist);
-
-//void get_tcpconnectinfo(const struct pcap_pkthdr header,const u_char *packet,unsigned int* sip, unsigned int* dip, unsigned int *s_port, unsigned int *d_port,unsigned long *sequence, unsigned long *ack_seq,unsigned int *ack,unsigned int *syn,unsigned int *fin,unsigned int *TCPsize);
-
 
 void get_tcpconnectinfo(const struct pcap_pkthdr header,const u_char *packet,unsigned long* sip, unsigned long* dip, unsigned long *s_port, unsigned long *d_port,unsigned long *sequence, unsigned long *ack_seq,unsigned long *ack,unsigned long *syn,unsigned long *fin,unsigned long *rst, unsigned long *TCPsize,unsigned long *Payload_size, unsigned long *Total_size);
 
@@ -106,10 +103,12 @@ int main(int argc, char *argv[] )
         exit(1);
     }
 
-    if( (pf = pcap_open_offline( argv[1], errbuf )) == NULL ){
+    if( (pf = pcap_open_offline( argv[argc-1], errbuf )) == NULL ){
         fprintf( stderr, "Can't process pcap file %s: %s\n", argv[1], errbuf );
         exit(1);
     }
+    //std::cout<<argv[argc-1]<<"\n";
+    //std::cout<<argv[argc-2]<<"\n";
 
     // ------------------ Part 1 ---------------------------
 
@@ -139,7 +138,7 @@ int main(int argc, char *argv[] )
     // structure in next part.
     // -----------------------------------------------------
     
-    if(argc ==3 && !strcmp(argv[2],"-t")){
+    if(argc ==3 && !strcmp(argv[argc-2],"-t")){
         //source ip source port, dest ip and dest port uniquely define a TCP connection
         unsigned long sip;
         unsigned long dip;
@@ -277,9 +276,6 @@ int main(int argc, char *argv[] )
                     std::array<unsigned long, 11> connect = {{sip,dip,s_port,d_port,0,0,0,0,0,0,0}};
                     connec_list.push_back(connect);
                 }
-
-                /** write_meta(1,sip,dip,s_port,d_port); */
-
             }
             packet_counter++;
         }
@@ -311,13 +307,20 @@ int main(int argc, char *argv[] )
         // ------------------------------ Finish sorting the packet --------------------------------------------------
         
         //--------------print info to terminal------------------
-        //printconnectinfo(init_packetinfo_list);
-        printconnectinfo(resp_packetinfo_list);
-        //--------------print info to terminal------------------
+        // this part is only for me to take a closer look
+        // at the data
+        //------------------------------------------------------
+        printconnectinfo(init_packetinfo_list);
+        //printconnectinfo(resp_packetinfo_list);
+        //------finish  print info to terminal------------------
         
-        // ------------------- Remove the duplicate packet and drop the ones are not ACKed ---------------------------
+        // -----------------------------------------------------------------------------------------------
+        // Remove the duplicate packet and drop the ones are not ACKed and detect if connection is closed 
+        // -----------------------------------------------------------------------------------------------
+    
         remodul_init_packet_list = init_packetinfo_list;
         remodul_resp_packet_list = resp_packetinfo_list;
+        int closed = 0;
 
         // drop the dulpicated packet in initiator direction
         int idropnum= 0;
@@ -341,7 +344,17 @@ int main(int argc, char *argv[] )
                     if(tcplenini+ seqini == ackrep && ackini ==seqrep){
                         ACKed = true;
                     }
+                    // check if it is a ACK
+                    else if(init_packetinfo_list[j][12] ==6 &&init_packetinfo_list[j][9] == 0){
+                        ACKed = true;
+                    }
                 }
+            }
+            else{
+                if( fin == 1){
+                    closed++;
+                }
+                ACKed = true;
             }
 
             if(!ACKed){
@@ -372,7 +385,18 @@ int main(int argc, char *argv[] )
                     if(tcplenrsp+ seqrsp == ackini && ackrsp ==seqini){
                         ACKed = true;
                     }
+                    
+                    // check if it is a ACK
+                    else if(resp_packetinfo_list[j][12] ==6 &&resp_packetinfo_list[j][9] == 0){
+                        ACKed = true;
+                    }
                 }
+            }
+            else{
+                if( fin == 1){
+                    closed++;
+                }
+                ACKed = true;
             }
 
             if(!ACKed){
@@ -385,9 +409,10 @@ int main(int argc, char *argv[] )
         // ---------- Finishing Remove the duplicate packet and drop the ones are not ACKed ---------------------------
 
 
-        printf("num of connection = %lu", connec_list.size());
+        //------------ anaylize and write the meta_data -------------------------
+        //printf("num of connection = %lu", connec_list.size());
         for(int i = 0; i<connec_list.size();i++ ){
-            analyconnection(connec_list[i],init_packetinfo_list,resp_packetinfo_list);
+            analyconnection(connec_list[i],init_packetinfo_list,resp_packetinfo_list,idropnum,rdropnum,closed);
             write_meta(connec_list[i],i+1);
         }
     
@@ -398,28 +423,21 @@ int main(int argc, char *argv[] )
         //=====================================================================
         char extention[11]= ".initiator";
         char *filename = (char *) malloc(1+strlen(extention)+sizeof(unsigned int));
-        sprintf(filename,"initiator/%d%s",1,extention);
+        sprintf(filename,"%d%s",1,extention);
         u_char *payload;                    
 
         FILE *f1 = fopen(filename, "wb");
-        //FILE *f = fopen("meta/1.meta", "wb");
         assert(f1 !=NULL);
 
         //unsigned long idx = 1;
-        if( (pf = pcap_open_offline( argv[1], errbuf )) == NULL ){
-            fprintf( stderr, "Can't process pcap file %s: %s\n", argv[1], errbuf );
+        if( (pf = pcap_open_offline( argv[argc-1], errbuf )) == NULL ){
+            fprintf( stderr, "Can't process pcap file %s: %s\n", argv[argc-1], errbuf );
             exit(1);
         }
 
         int k = 1;
         while((packet = pcap_next(pf, &header)) != NULL){
-        //for(int k = 0; k < packetlist.size();k++){
-            ////bool printit = false;
-            //remodul_init_packet_list;
-            //for(int i = 0; i<init_packetinfo_list.size();i++){
             for(int i = 0; i<remodul_init_packet_list.size();i++){
-                //std::cout<<init_packetinfo_list[i][10] <<std::endl;
-                //if(k == init_packetinfo_list[i][10]){
                 if(k == remodul_init_packet_list[i][10]){
                     ////printit = true;
                     fprintf(f1,"----------------------------------\n");
@@ -442,16 +460,63 @@ int main(int argc, char *argv[] )
                     int payload_size = packetsize - header_size;
                     
                     write_data(payload ,payload_size ,f1);
-                    //printf("packet number: %d\n",k);
-                    //printf("----------------------------------\n");
-                    //PrintData(payload ,payload_size);
-                    //std::cout<<i<<std::endl;
                     break;
                 }
             }
             k++;
         }
         fclose(f1);
+
+        //=====================================================================
+        //--------------------write responder----------------------------------
+        //=====================================================================
+        char extention2[11]= ".responder";
+        //char extention2[12]= ".responderf";
+        char *filename2 = (char *) malloc(1+strlen(extention)+sizeof(unsigned int));
+        sprintf(filename2,"%d%s",1,extention2);
+
+
+        FILE *f2 = fopen(filename2, "wb");
+        assert(f2 !=NULL);
+
+        //unsigned long idx = 1;
+        if( (pf = pcap_open_offline( argv[argc-1], errbuf )) == NULL ){
+            fprintf( stderr, "Can't process pcap file %s: %s\n", argv[argc-1], errbuf );
+            exit(1);
+        }
+
+        k = 1;
+        while((packet = pcap_next(pf, &header)) != NULL){
+            for(int i = 0; i<remodul_resp_packet_list.size();i++){
+            //for(int i = 0; i<resp_packetinfo_list.size();i++){
+                if(k == remodul_resp_packet_list[i][10]){
+                //if(k ==resp_packetinfo_list[i][10]){
+                    fprintf(f2,"----------------------------------\n");
+                    fprintf(f2,"packet number: %d\n",k);
+                    fprintf(f2,"----------------------------------\n");
+
+                    struct iphdr *iph = (struct iphdr *)(packet + sizeof(struct ethhdr));
+                    int iphdrlen = iph ->ihl*4; // the length of ip header
+
+                    // since tcp is encapsulated inside of a ip packet, which is inside of a ethernet packet
+                    // the total length of tcp header would be packet + iphr length+ ethhdr length
+                    struct tcphdr * tcph = (struct tcphdr *)(packet + iphdrlen + sizeof(struct ethhdr));
+                    int tcphdrlen = tcph ->doff*4; // the length of tcp header;
+
+                    int header_size = sizeof(struct ethhdr) + iphdrlen + tcphdrlen;
+                    //calc the payload size: payload = total_size - header_size
+                    payload = (u_char *)(packet + sizeof(struct ethhdr)+iphdrlen + tcphdrlen);
+                    int packetsize = header.len;
+                    int payload_size = packetsize - header_size;
+                    
+                    write_data(payload ,payload_size ,f2);
+                    break;
+                }
+            }
+            k++;
+        }
+        fclose(f2);
+
     }
 
     // -------------------Part 3 ---------------------------
@@ -516,7 +581,7 @@ void printconnectinfo(const std::vector<std::array<unsigned long,14> > packetinf
     }
 }
 void analyconnection(std::array<unsigned long, 11> &connect,const std::vector<std::array<unsigned long,14> > init_packetinfo_list,
-        const std::vector<std::array<unsigned long,14> > resp_packetinfo_list){
+        const std::vector<std::array<unsigned long,14> > resp_packetinfo_list,int idropnum,int rdropnum,int closed){
     // Recall the structure of connection:[initiator_ip; responder_ip;initiator_port; responder_port;
     // num_sent_by_i;  num_sent_by_r;   num_byte_sent_by_i;   num_byte_sent_by_r;  num_ofdul_i; num_ofdul_r;
     // closed]
@@ -540,6 +605,21 @@ void analyconnection(std::array<unsigned long, 11> &connect,const std::vector<st
     connect[7] = responbyte;
 
     //number of duplicate packet sent by initiator;
+    connect[8] = idropnum;
+
+    //number of duplicate packet sent by responder;
+    connect[9] = rdropnum;
+
+    //whether the connection is closed
+    if(closed ==2){
+        //is closed
+        connect[10] = 1;
+    }
+    else{
+        //not closed
+        connect[10] = 0;
+    }
+    
 }
 
 
@@ -547,7 +627,8 @@ void analyconnection(std::array<unsigned long, 11> &connect,const std::vector<st
 void write_meta(const std::array<unsigned long, 11> connect,int idx){
     char extention[6]= ".meta";
     char *filename = (char *) malloc(1+strlen(extention)+sizeof(unsigned int));
-    sprintf(filename,"meta/%d%s",idx,extention);
+    //sprintf(filename,"meta/%d%s",idx,extention);
+    sprintf(filename,"%d%s",idx,extention);
 
     // Recall the structure of connection:[initiator_ip; responder_ip;initiator_port; responder_port;
     // num_sent_by_i;  num_sent_by_r;   num_byte_sent_by_i;   num_byte_sent_by_r;  num_ofdul_i; num_ofdul_r;
@@ -561,6 +642,13 @@ void write_meta(const std::array<unsigned long, 11> connect,int idx){
     unsigned long num_pr = connect[5];
     unsigned long byte_i = connect[6];
     unsigned long byte_r = connect[7];
+    unsigned long idrop = connect[8];
+    unsigned long rdrop = connect[9];
+    unsigned long closed = connect[10];
+    bool bclosed = false;
+    if(closed == 1){
+        bclosed = true;
+    }
 
     FILE *f = fopen(filename, "wb");
     //FILE *f = fopen("meta/1.meta", "wb");
@@ -575,6 +663,9 @@ void write_meta(const std::array<unsigned long, 11> connect,int idx){
     fprintf(f,"Total Number of packets sent by responder (including duplicates)   :%lu\n", num_pr);
     fprintf(f,"Total Number of byte sent by initiator    (including duplicates)   :%lu\n", byte_i);
     fprintf(f,"Total Number of byte sent by responder    (including duplicates)   :%lu\n", byte_r);
+    fprintf(f,"Number of duplicate packets sent by initiator       :%lu\n", idrop);
+    fprintf(f,"Number of duplicate packets sent by responder       :%lu\n", rdrop);
+    fprintf(f,"Connection is closed      :%s\n", bclosed ? "true" : "false");
     fclose(f);
 }
 
@@ -632,15 +723,11 @@ void get_tcpconnectinfo(const struct pcap_pkthdr header,const u_char *packet,uns
 }
 
 void write_data(const u_char * data , int Size,FILE *f){
-
     int i , j;
-    for(i=0 ; i < Size ; i++)
-    {
-        if( i!=0 && i%16==0)   //if one line of hex printing is complete...
-        {
+    for(i=0 ; i < Size ; i++){
+        if( i!=0 && i%16==0){
             fprintf(f, "         ");
-            for(j=i-16 ; j<i ; j++)
-            {
+            for(j=i-16 ; j<i ; j++){
                 if(data[j]>=32 && data[j]<=128)
                     fprintf(f, "%c",(unsigned char)data[j]); //if its a number or alphabet
 
@@ -652,23 +739,18 @@ void write_data(const u_char * data , int Size,FILE *f){
         if(i%16==0) fprintf(f,"   ");
         fprintf(f," %02X",(unsigned int)data[i]);
 
-        if( i==Size-1)  //print the last spaces
-        {
-            for(j=0;j<15-i%16;j++)
-            {
+        if( i==Size-1){
+            for(j=0;j<15-i%16;j++){
                 fprintf(f, "   "); //extra spaces
             }
 
             fprintf(f,"         ");
 
-            for(j=i-i%16 ; j<=i ; j++)
-            {
-                if(data[j]>=32 && data[j]<=128)
-                {
+            for(j=i-i%16 ; j<=i ; j++){
+                if(data[j]>=32 && data[j]<=128){
                     fprintf(f, "%c",(unsigned char)data[j]);
                 }
-                else
-                {
+                else{
                     fprintf(f, ".");
                 }
             }
@@ -836,7 +918,7 @@ void print_tcp_packet(const u_char* packet,int size){
     printf("Checksum is valid      :%s\n", valid ? "true" : "false");
     printf("Payload size           :%d bytes\n", payload_size);
     //PrintData (packet, size); 
-    PrintData (payload, payload_size); 
+    //PrintData (payload, payload_size); 
     printf("\n");
 
 }
