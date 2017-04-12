@@ -276,9 +276,9 @@ int main(int argc, char *argv[] )
 
             packet_counter++;
         }
-        std::cout<<"responder # = "<< resp_full_list.size()<<std::endl;
-        std::cout<<"initiator # = "<< init_full_list.size()<<std::endl;
-        std::cout<<"connction # = "<< connec_list.size()<<std::endl;
+        std::cout<<"# of responder  = "<< resp_full_list.size()<<std::endl;
+        std::cout<<"# of initiator  = "<< init_full_list.size()<<std::endl;
+        std::cout<<"# of connction  = "<< connec_list.size()<<std::endl;
         //for(int i = 0 ;i< resp_full_list.size();i++){
 
             //printconnectinfo(resp_full_list[i]);
@@ -313,10 +313,6 @@ int main(int argc, char *argv[] )
                         &TCPsize,&Payload_size,&Total_size);
 
                 // figure out which connection it belongs to;
-                    //init_full_list;
-                    //resp_full_list;
-/*                std::array<unsigned long, 14> resp_packet = {{sip,dip,s_port,d_port,seq_relative,ack_relative,*/
-                    //ack,syn,fin,TCPsize,packet_counter,rst,Payload_size,Total_size}};
         
                 //-------------------- load packet to list --------------------------
                 unsigned long seq_relative = 0; 
@@ -386,14 +382,26 @@ int main(int argc, char *argv[] )
 
         // ------------------------------ Finish sorting the packet --------------------------------------------------
         
-        ////--------------print info to terminal------------------
-        //// this part is only for me to take a closer look
+        ////--------------print the full connection info to terminal------------------
+        //// this part is just for me to take a closer look
         //// at the data
-        ////------------------------------------------------------
+        ////--------------------------------------------------------------------------
+        printf("=========================================\n");
+        printf(" Original connection info from Initiator\n");
+        printf("=========================================\n");
         for(int i = 0; i<init_full_list.size();i++){
+            printf("=========================\n");
+            printf(" %dth Initiator:\n",i+1);
+            printf("=========================\n");
             printconnectinfo(init_full_list[i]);
         }
+        printf("=========================================\n");
+        printf(" Original connection info from Responser\n");
+        printf("=========================================\n");
         for(int i = 0; i<resp_full_list.size();i++){
+            printf("=========================\n");
+            printf(" %dth Responser:\n",i+1);
+            printf("=========================\n");
             printconnectinfo(resp_full_list[i]);
         }
         ////------finish  print info to terminal------------------
@@ -402,14 +410,10 @@ int main(int argc, char *argv[] )
         //// Remove the duplicate packet and drop the ones are not ACKed and detect if connection is closed 
         //// -----------------------------------------------------------------------------------------------
     
-        //remodul_init_packet_list = init_packetinfo_list;
-        //remodul_resp_packet_list = resp_packetinfo_list;
         std::vector <int> iclosed_list;
         std::vector <int> rclosed_list;
         std::vector <int> idropnum_list;
         std::vector <int> rdropnum_list;
-        //std::vector<std::vector<std::array<unsigned long,14> > > remodul_init_full_list; // a list to store the connection info
-        //std::vector<std::vector<std::array<unsigned long,14> > > remodul_resp_full_list; // a list to store the connection info
 
         for(int g = 0; g< init_full_list.size();g++){
             std::vector<std::array<unsigned long, 14> >remodul_init_packet_list = init_full_list[g];
@@ -427,7 +431,8 @@ int main(int argc, char *argv[] )
                 unsigned long fin = init_full_list[g][i][8];
                 unsigned long rst = init_full_list[g][i][11];
                 bool ACKed = false;
-                bool Fragment = false;
+                bool Retrans = false; //actually a "suspect" retransmission
+                bool ACKed_duplicate = false;
 
                 if(ack ==1 &&syn== 0 &&fin ==0){ // make sure it is the packet in between connection
                     for(int j = 0; j<resp_full_list[g].size();j++){
@@ -448,13 +453,6 @@ int main(int argc, char *argv[] )
                             ACKed = true;
                         }
                     }
-                    /*if(ACKed == false){*/
-                        //// if it is not ACKed, it might be a Fragment check if
-                        ////  seq + tcplen = (next packet at this end's) seq 
-                        //if(seqini +tcplenini == init_full_list[g][i+1][4]){
-                            //Fragment == true;
-                        //}
-                    /*}*/
                 }
 
                 if( fin == 1 &&ack ==1){
@@ -468,8 +466,26 @@ int main(int argc, char *argv[] )
                     ACKed = true;
                 }
 
-                if(!ACKed){
-                    //drop that packet because it is not ACKed, hence a duplicate
+                // Now check retransmission: 
+                int counter = 0;
+                for(int h = i+1; h<init_full_list[g].size();h++){
+                    unsigned long seqh  = init_full_list[g][h][4];
+                    unsigned long ackh  = init_full_list[g][h][5];
+                    if (seqini >= seqh  && ackini >= ackh ){
+                        Retrans = true;
+                    }
+                    if(seqini ==seqh && ackini ==ackh){
+                        // this is to drop the first dulplicated packet even though it has been ACKed (ex. the NO.22 in stmp.pcap)
+                        counter = h - i;
+                    }
+                }
+                if(counter >=2){
+                    ACKed_duplicate = true;
+                    //std::cout<<" Retrans # is" << i<<std::endl;
+                }
+
+                if(((!ACKed) && Retrans) || ACKed_duplicate){
+                    //drop that packet because it is not ACKed and is suspected as a retransmission, hence a duplicate to drop
                     remodul_init_packet_list.erase(remodul_init_packet_list.begin()+i-idropnum);
                     idropnum++;
                     //std::cout<<" Drop #"<<i<<std::endl;
@@ -478,7 +494,7 @@ int main(int argc, char *argv[] )
             remodul_init_full_list.push_back(remodul_init_packet_list);
             idropnum_list.push_back(idropnum);
             iclosed_list.push_back(closed);
-            std::cout<<g<<"th "<<"initiator drop number is :"<<idropnum<<std::endl;
+            std::cout<<g+1<<"th "<<"initiator has "<<idropnum<<" duplicated packet to drop"<<std::endl;
         }
         // drop the dulpicated packet in responser direction
         
@@ -497,6 +513,7 @@ int main(int argc, char *argv[] )
                 unsigned long fin = resp_full_list[g][i][8];
                 unsigned long rst = init_full_list[g][i][11];
                 bool ACKed = false;
+                bool Retrans = false; //actually the "suspect" retransmission
 
                 if(ack ==1 &&syn== 0 &&fin ==0){ // make sure it is the packet in between connection
                     for(int j = 0; j<init_full_list[g].size();j++){
@@ -520,21 +537,33 @@ int main(int argc, char *argv[] )
                         }
                     }
                 }
-                else{
-                    if( fin == 1 &&ack ==1){
-                        closed++;
-                        ACKed = true;
-                    }
-                    else if(syn ==1){
-                        ACKed = true;
-                    }
-                    else if(rst ==1 && ack == 1){
-                        ACKed = true;
-                    }
+
+                if( fin == 1 &&ack ==1){
+                    closed++;
+                    ACKed = true;
+                }
+                if(syn ==1){
+                    ACKed = true;
+                }
+                if(rst ==1 &&ack == 1){
+                    ACKed = true;
                 }
 
-                if(!ACKed){
-                    //drop that packet because it is not ACKed, hence a duplicate
+                // Now check retransmission: 
+                int counter = 0;
+                for(int h = i+1; h<init_full_list[g].size();h++){
+                    unsigned long seqh  = resp_full_list[g][h][4];
+                    unsigned long ackh  = resp_full_list[g][h][5];
+                    if (seqrsp >= seqh  && ackrsp >= ackh ){
+                        counter ++;
+                    }
+                }
+                if(counter >=1){
+                    Retrans = true;
+                    //std::cout<<" Retrans # is" << i<<std::endl;
+                }
+
+                if((!ACKed) && Retrans){
                     remodul_resp_packet_list.erase(remodul_resp_packet_list.begin()+i-rdropnum);
                     rdropnum++;
                 }
@@ -542,7 +571,7 @@ int main(int argc, char *argv[] )
             remodul_resp_full_list.push_back(remodul_resp_packet_list);
             rdropnum_list.push_back(rdropnum);
             rclosed_list.push_back(closed);
-            std::cout<<g<<"th "<<"responder drop number is :"<<rdropnum<<std::endl;
+            std::cout<<g+1<<"th "<<"responder has "<<rdropnum<<" duplicated packet to drop"<<std::endl;
         }
 
         //// ---------- Finishing Remove the duplicate packet and drop the ones are not ACKed ---------------------------
@@ -665,52 +694,6 @@ int main(int argc, char *argv[] )
             }
             fclose(f1);
         }
-        //char extention2[11]= ".responder";
-        ////char extention2[12]= ".responderf";
-        //char *filename2 = (char *) malloc(1+strlen(extention)+sizeof(unsigned int));
-        //sprintf(filename2,"%d%s",1,extention2);
-
-
-        //FILE *f2 = fopen(filename2, "wb");
-        //assert(f2 !=NULL);
-
-        ////unsigned long idx = 1;
-        //if( (pf = pcap_open_offline( argv[argc-1], errbuf )) == NULL ){
-            //fprintf( stderr, "Can't process pcap file %s: %s\n", argv[argc-1], errbuf );
-            //exit(1);
-        //}
-
-        //k = 1;
-        //while((packet = pcap_next(pf, &header)) != NULL){
-            //for(int i = 0; i<remodul_resp_packet_list.size();i++){
-            ////for(int i = 0; i<resp_packetinfo_list.size();i++){
-                //if(k == remodul_resp_packet_list[i][10]){
-                ////if(k ==resp_packetinfo_list[i][10]){
-                    //fprintf(f2,"----------------------------------\n");
-                    //fprintf(f2,"packet number: %d\n",k);
-                    //fprintf(f2,"----------------------------------\n");
-
-                    //struct iphdr *iph = (struct iphdr *)(packet + sizeof(struct ethhdr));
-                    //int iphdrlen = iph ->ihl*4; // the length of ip header
-
-                    //// since tcp is encapsulated inside of a ip packet, which is inside of a ethernet packet
-                    //// the total length of tcp header would be packet + iphr length+ ethhdr length
-                    //struct tcphdr * tcph = (struct tcphdr *)(packet + iphdrlen + sizeof(struct ethhdr));
-                    //int tcphdrlen = tcph ->doff*4; // the length of tcp header;
-
-                    //int header_size = sizeof(struct ethhdr) + iphdrlen + tcphdrlen;
-                    ////calc the payload size: payload = total_size - header_size
-                    //payload = (u_char *)(packet + sizeof(struct ethhdr)+iphdrlen + tcphdrlen);
-                    //int packetsize = header.len;
-                    //int payload_size = packetsize - header_size;
-                    
-                    //write_data(payload ,payload_size ,f2);
-                    //break;
-                //}
-            //}
-            //k++;
-        /*}*/
-        //fclose(f2);
 
     }
 
