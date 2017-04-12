@@ -191,7 +191,6 @@ int main(int argc, char *argv[] )
 
 
             // since we only cares about tcp connections:
-        
             if(ip->protocol == IPPROTO_TCP){
                 // first, parse metadata and figure out how many connections
                 get_tcpconnectinfo(header,packet,&sip,&dip,&s_port,&d_port,&sequence,&ack_seq,&ack,&syn,&fin,&rst,
@@ -200,7 +199,7 @@ int main(int argc, char *argv[] )
                 //------------------------- compute relative seq_number and ack_number --------------------------
                 unsigned long seq_relative = 0; 
                 unsigned long ack_relative = 0; 
-                // whenever there is a syn. it indicates an attempt for a connection
+                // whenever there is a syn. it indicates an attempt for a new connection
                 if(ack ==0 && syn ==1){
                     seq_ref = sequence;
                     seq_reflist.push_back(sequence);
@@ -416,7 +415,7 @@ int main(int argc, char *argv[] )
             write_meta(connec_list[i],i+1);
         }
     
-        std::cout<<"total connection = "<<connection_count<<"  "<<connec_list.size();
+        std::cout<<"total connection = "<<connec_list.size();
 
         //=====================================================================
         //--------------------write initiator----------------------------------
