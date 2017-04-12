@@ -434,7 +434,8 @@ int main(int argc, char *argv[] )
                 bool Retrans = false; //actually a "suspect" retransmission
                 bool ACKed_duplicate = false;
 
-                if(ack ==1 &&syn== 0 &&fin ==0){ // make sure it is the packet in between connection
+                //if(ack ==1 &&syn== 0 &&fin ==0){ // make sure it is the packet in between connection
+                if(ack ==1){ // make sure it is the packet in between connection
                     for(int j = 0; j<resp_full_list[g].size();j++){
 
                         // To get ACKed, (tcplenini + seqini = ackrep  && ackini = seqrep )has to hold at somewhere
@@ -445,19 +446,30 @@ int main(int argc, char *argv[] )
                         if(tcplenini+ seqini == ackrep && ackini ==seqrep){
                             ACKed = true;
                         }
-                        else if(tcplenrep + seqrep ==ackini && ackrep == seqini){
+                        //else if(tcplenrep + seqrep ==ackini && ackrep == seqini){
+                        if(tcplenrep + seqrep ==ackini && ackrep == seqini){
                             ACKed = true;
                         }
                         // check if it is just a ACK message
-                        else if(init_full_list[g][j][12] ==6 &&init_full_list[g][j][9] == 0){
+                        //else if(init_full_list[g][j][12] ==6 &&init_full_list[g][j][9] == 0){
+                        if(init_full_list[g][j][12] ==6 &&init_full_list[g][j][9] == 0){
                             ACKed = true;
                         }
                     }
                 }
-
+                
+                // check closing
                 if( fin == 1 &&ack ==1){
-                    closed++;
-                    ACKed = true;
+                    for(int j = 0; j<resp_full_list[g].size();j++){
+                        unsigned long seqrep = resp_full_list[g][j][4];
+                        unsigned long ackrep = resp_full_list[g][j][5];
+                        unsigned long tcplenrep  = resp_full_list[g][j][9];
+
+                        if(tcplenini+ seqini == ackrep && ackini ==seqrep){
+                            closed++;
+                            ACKed = true;
+                        }
+                    }
                 }
                 if(syn ==1){
                     ACKed = true;
@@ -495,6 +507,7 @@ int main(int argc, char *argv[] )
             idropnum_list.push_back(idropnum);
             iclosed_list.push_back(closed);
             std::cout<<g+1<<"th "<<"initiator has "<<idropnum<<" duplicated packet to drop"<<std::endl;
+            std::cout<<"closed "<<closed<<std::endl;
         }
         // drop the dulpicated packet in responser direction
         
@@ -515,7 +528,8 @@ int main(int argc, char *argv[] )
                 bool ACKed = false;
                 bool Retrans = false; //actually the "suspect" retransmission
 
-                if(ack ==1 &&syn== 0 &&fin ==0){ // make sure it is the packet in between connection
+                //if(ack ==1 &&syn== 0 &&fin ==0){ // make sure it is the packet in between connection
+                if(ack ==1){ // make sure it is the packet in between connection
                     for(int j = 0; j<init_full_list[g].size();j++){
 
                         // To get ACKed, (tcplenrsp+ seqrsp == ackini && ackrsp ==seqini)has to hold at somewhere
@@ -527,21 +541,35 @@ int main(int argc, char *argv[] )
                             ACKed = true;
                         }
 
-                        else if(tcplenini+ seqini == ackrsp && ackini ==seqrsp){
+                        //else if(tcplenini+ seqini == ackrsp && ackini ==seqrsp){
+                        if(tcplenini+ seqini == ackrsp && ackini ==seqrsp){
                             ACKed = true;
                         }
 
                         // check if it is a ACK
-                        else if(resp_full_list[g][j][12] ==6 &&resp_full_list[g][j][9] == 0){
+                        //else if(resp_full_list[g][j][12] ==6 &&resp_full_list[g][j][9] == 0){
+                        if(resp_full_list[g][j][12] ==6 &&resp_full_list[g][j][9] == 0){
                             ACKed = true;
                         }
                     }
                 }
 
+                // check Fin is send and if Fin is ACKed by the other side
                 if( fin == 1 &&ack ==1){
-                    closed++;
-                    ACKed = true;
+                    for(int j = 0; j<init_full_list[g].size();j++){
+
+                        // To get ACKed, (tcplenrsp+ seqrsp == ackini && ackrsp ==seqini)has to hold at somewhere
+                        unsigned long seqini = init_full_list[g][j][4];
+                        unsigned long ackini = init_full_list[g][j][5];
+                        unsigned long tcplenini  = init_full_list[g][j][9];
+
+                        if(tcplenrsp+ seqrsp == ackini -1 && ackrsp ==seqini - 1){
+                            ACKed = true;
+                            closed++;
+                        }
+                    }
                 }
+
                 if(syn ==1){
                     ACKed = true;
                 }
@@ -572,6 +600,7 @@ int main(int argc, char *argv[] )
             rdropnum_list.push_back(rdropnum);
             rclosed_list.push_back(closed);
             std::cout<<g+1<<"th "<<"responder has "<<rdropnum<<" duplicated packet to drop"<<std::endl;
+            std::cout<<"closed "<<closed<<std::endl;
         }
 
         //// ---------- Finishing Remove the duplicate packet and drop the ones are not ACKed ---------------------------
