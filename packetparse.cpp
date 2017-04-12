@@ -161,8 +161,6 @@ int main(int argc, char *argv[] )
         
         // where the sequence number and ack_seq stored here will be the relative version
         // stucture for each packet:[sip,dip,s_port,s_port,sequence, ack_seq,ack,syn,fin,tcpsize,packet_number];
-/*        std::vector<std::array<unsigned long, 14> >remodul_init_packet_list;*/
-        //std::vector<std::array<unsigned long, 14> >remodul_resp_packet_list;
 
 
         std::vector<std::vector<std::array<unsigned long,14> > > init_full_list; // a list to store the connection info
@@ -386,6 +384,7 @@ int main(int argc, char *argv[] )
         //// this part is just for me to take a closer look
         //// at the data
         ////--------------------------------------------------------------------------
+        /*
         printf("=========================================\n");
         printf(" Original connection info from Initiator\n");
         printf("=========================================\n");
@@ -404,6 +403,7 @@ int main(int argc, char *argv[] )
             printf("=========================\n");
             printconnectinfo(resp_full_list[i]);
         }
+        */
         ////------finish  print info to terminal------------------
         
         //// -----------------------------------------------------------------------------------------------
@@ -469,7 +469,6 @@ int main(int argc, char *argv[] )
                         if(tcplenini == 0 &&rst == 0 && ack == 1){
                             closed++;
                             ACKed = true;
-                            std::cout<<"# = "<< j<<" "<<rst<<" "<<ack<<std::endl;
                         }
                     }
                 }
@@ -509,7 +508,7 @@ int main(int argc, char *argv[] )
             idropnum_list.push_back(idropnum);
             iclosed_list.push_back(closed);
             std::cout<<g+1<<"th "<<"initiator has "<<idropnum<<" duplicated packet to drop"<<std::endl;
-            std::cout<<g+1<<"th "<<"initiator closed?  "<<closed<<std::endl;
+            std::cout<<g+1<<"th "<<"initiator closed?  "<<closed<<" (1->yes; 0->no;)"<<std::endl;
         }
         // drop the dulpicated packet in responser direction
         
@@ -570,20 +569,6 @@ int main(int argc, char *argv[] )
                         }
                     }
                 }
-                /*if( fin == 1 &&ack ==1){*/
-                    //for(int j = 0; j<init_full_list[g].size();j++){
-
-                        //// To get ACKed, (tcplenrsp+ seqrsp == ackini && ackrsp ==seqini)has to hold at somewhere
-                        //unsigned long seqini = init_full_list[g][j][4];
-                        //unsigned long ackini = init_full_list[g][j][5];
-                        //unsigned long tcplenini  = init_full_list[g][j][9];
-
-                        //if(tcplenrsp+ seqrsp == ackini -1 && ackrsp ==seqini - 1){
-                            //ACKed = true;
-                            //closed++;
-                        //}
-                    //}
-                /*}*/
 
                 if(syn ==1){
                     ACKed = true;
@@ -615,7 +600,7 @@ int main(int argc, char *argv[] )
             rdropnum_list.push_back(rdropnum);
             rclosed_list.push_back(closed);
             std::cout<<g+1<<"th "<<"responder has "<<rdropnum<<" duplicated packet to drop"<<std::endl;
-            std::cout<<g+1<<"th "<<"responder closed?  "<<closed<<std::endl;
+            std::cout<<g+1<<"th "<<"responder closed?  "<<closed<<" (1->yes; 0->no;)"<<std::endl;
         }
 
         //// ---------- Finishing Remove the duplicate packet and drop the ones are not ACKed ---------------------------
@@ -842,7 +827,6 @@ void analyconnection(std::array<unsigned long, 11> &connect,const std::vector<st
         //not closed
         connect[10] = 0;
     }
-    
 }
 
 
@@ -1174,13 +1158,10 @@ void PrintData (const u_char * data , int Size){
     //make comparason of my result with the wireshark result
     //http://www.binarytides.com/packet-sniffer-code-c-libpcap-linux-sockets/
     int i , j;
-    for(i=0 ; i < Size ; i++)
-    {
-        if( i!=0 && i%16==0)   //if one line of hex printing is complete...
-        {
+    for(i=0 ; i < Size ; i++){
+        if( i!=0 && i%16==0){
             printf( "         ");
-            for(j=i-16 ; j<i ; j++)
-            {
+            for(j=i-16 ; j<i ; j++){
                 if(data[j]>=32 && data[j]<=128)
                     printf( "%c",(unsigned char)data[j]); //if its a number or alphabet
 
@@ -1192,17 +1173,14 @@ void PrintData (const u_char * data , int Size){
         if(i%16==0) printf("   ");
         printf(" %02X",(unsigned int)data[i]);
 
-        if( i==Size-1)  //print the last spaces
-        {
-            for(j=0;j<15-i%16;j++)
-            {
+        if( i==Size-1){
+            for(j=0;j<15-i%16;j++){
                 printf( "   "); //extra spaces
             }
 
             printf("         ");
 
-            for(j=i-i%16 ; j<=i ; j++)
-            {
+            for(j=i-i%16 ; j<=i ; j++){
                 if(data[j]>=32 && data[j]<=128)
                 {
                     printf( "%c",(unsigned char)data[j]);
