@@ -460,14 +460,16 @@ int main(int argc, char *argv[] )
                 
                 // check closing
                 if( fin == 1 &&ack ==1){
-                    for(int j = 0; j<resp_full_list[g].size();j++){
-                        unsigned long seqrep = resp_full_list[g][j][4];
-                        unsigned long ackrep = resp_full_list[g][j][5];
-                        unsigned long tcplenrep  = resp_full_list[g][j][9];
-
-                        if(tcplenini+ seqini == ackrep && ackini ==seqrep){
+                    for(int j = i + 1; j<init_full_list[g].size();j++){
+                        unsigned long tcplenini  = init_full_list[g][j][9];
+                        unsigned long rst = init_full_list[g][j][11];
+                        unsigned long ack = init_full_list[g][j][6];
+                        // if after a FIN is send by initiator, it then sent a ACK, 
+                        // I consider this is an ACK FIN to the other end. (I might be wrong..)
+                        if(tcplenini == 0 &&rst == 0 && ack == 1){
                             closed++;
                             ACKed = true;
+                            std::cout<<"# = "<< j<<" "<<rst<<" "<<ack<<std::endl;
                         }
                     }
                 }
@@ -556,19 +558,32 @@ int main(int argc, char *argv[] )
 
                 // check Fin is send and if Fin is ACKed by the other side
                 if( fin == 1 &&ack ==1){
-                    for(int j = 0; j<init_full_list[g].size();j++){
-
-                        // To get ACKed, (tcplenrsp+ seqrsp == ackini && ackrsp ==seqini)has to hold at somewhere
-                        unsigned long seqini = init_full_list[g][j][4];
-                        unsigned long ackini = init_full_list[g][j][5];
-                        unsigned long tcplenini  = init_full_list[g][j][9];
-
-                        if(tcplenrsp+ seqrsp == ackini -1 && ackrsp ==seqini - 1){
-                            ACKed = true;
+                    for(int j = i+1; j<resp_full_list[g].size();j++){
+                        unsigned long tcplenrsp  = resp_full_list[g][j][9];
+                        unsigned long rst = resp_full_list[g][i][11];
+                        unsigned long ack = resp_full_list[g][i][6];
+                        // if after a FIN is send by initiator, it then sent a ACK, 
+                        // I consider this is an ACK FIN to the other end. (I might be wrong..)
+                        if(tcplenrsp == 0 &&rst == 0 && ack ==1){
                             closed++;
+                            ACKed = true;
                         }
                     }
                 }
+                /*if( fin == 1 &&ack ==1){*/
+                    //for(int j = 0; j<init_full_list[g].size();j++){
+
+                        //// To get ACKed, (tcplenrsp+ seqrsp == ackini && ackrsp ==seqini)has to hold at somewhere
+                        //unsigned long seqini = init_full_list[g][j][4];
+                        //unsigned long ackini = init_full_list[g][j][5];
+                        //unsigned long tcplenini  = init_full_list[g][j][9];
+
+                        //if(tcplenrsp+ seqrsp == ackini -1 && ackrsp ==seqini - 1){
+                            //ACKed = true;
+                            //closed++;
+                        //}
+                    //}
+                /*}*/
 
                 if(syn ==1){
                     ACKed = true;
