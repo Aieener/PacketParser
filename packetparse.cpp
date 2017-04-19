@@ -181,6 +181,7 @@ int main(int argc, char *argv[] )
 
         std::vector<const u_char *> packetlist;
 
+        //iterator
         while((packet = pcap_next(pf, &header)) != NULL){
             packetlist.push_back(packet);
             const struct iphdr *ip;
