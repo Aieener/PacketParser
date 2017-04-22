@@ -190,7 +190,6 @@ void email_traffic(int numconnection,int argc, char *argv[]){
                 st<<"Recipient's Email address: "<<line<<"\n";
             }
         }
-        bool accept = false;
 
         //next check if the message was accepted:
         //Check is DATA is accepted by look at the server's response;
@@ -211,18 +210,36 @@ void email_traffic(int numconnection,int argc, char *argv[]){
         //451 – The command has been aborted due to a server error. (on their side)
         //452 – The command has been aborted because the server has insufficient system storage.
         
+        //here we consider the message is recieved if there is a 250 after 354 and following by 221 
         std::string linebuffer;
+        std::string linebuffer2;
+
+        int accept = 0;
         while(getline(server,line)){
             if(line.find("221 ") != std::string::npos){
                 if(linebuffer.find("250 ") != std::string::npos ||
                         linebuffer.find("251 ") != std::string::npos||
                         linebuffer.find("252 ") != std::string::npos){
-                    accept = true;
+                    accept++;
                 }
             }
             linebuffer = line;
         }
-        if(accept){
+
+        std::ifstream serverb(servername);
+        while(getline(serverb,line)){
+            if(line.find("250 ") != std::string::npos ||
+                    linebuffer.find("251 ") != std::string::npos||
+                    linebuffer.find("252 ") != std::string::npos){
+
+                if(linebuffer.find("354 ") != std::string::npos){
+                    accept++;
+                }
+            }
+            linebuffer = line;
+        }
+
+        if(accept == 2){
             st<<"The message is accepted by the server\n";
         }
         else{
@@ -251,6 +268,10 @@ void email_traffic(int numconnection,int argc, char *argv[]){
         std::string data = st.str();
         myfile<<data;
         myfile.close();
+        server.close();
+        serverb.close();
+        client.close();
+        clientb.close();
     }
 }
 
