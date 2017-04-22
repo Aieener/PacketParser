@@ -23,6 +23,8 @@
  *                       
  *                       Then the program will analysis those txt file and extract
  *                       information for STMP from it.
+ *                       
+ *                       extra credit: extract cookies from HTTP connections
  */
 
 #include <pcap.h>
@@ -54,9 +56,11 @@ void parsing_packets(const struct pcap_pkthdr header,const u_char *packet);
 // part 2: Due 4/12/17
 void tcp_flows(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int argc, char *argv[],char errbuf[PCAP_ERRBUF_SIZE]);
 
-// part 3: Due 4/24/17
-int stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int argc, char *argv[],char errbuf[PCAP_ERRBUF_SIZE]);
+// part 3 and extra: Due 4/24/17
+int stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int argc, char *argv[],char errbuf[PCAP_ERRBUF_SIZE],bool stmp);
 void email_traffic(int numconnection,int argc, char *argv[]);
+void analycookie(int numconnection,int argc, char *argv[]);
+
 ///-----------------------
 
 // ------ pseudo_header for TcpCheckSum -----------
@@ -147,11 +151,20 @@ int main(int argc, char *argv[] )
     if(argc ==3 && !strcmp(argv[argc-2],"-m")){
         // basically redo part 2 with filtering port number to be 25 or 587
         // and return the total number of connections;
-        int numconnection = stmp_flow(pf, header,packet,argc,argv,errbuf);
+        int numconnection = stmp_flow(pf, header,packet,argc,argv,errbuf,true);
 
         // now we should have several n.xxx.stmp.txt file generated;
-        // anaylize them and generate n.mail files
+        // analyze them and generate n.mail files
         email_traffic(numconnection,argc,argv);
+    }
+    // -------------------extra credit ---------------------
+    if(argc ==3 && !strcmp(argv[argc-2],"-c")){
+        // basically redo part 2 and return the total number of connections;
+        int numconnection = stmp_flow(pf, header,packet,argc,argv,errbuf,false); //no filter on ports
+
+        // now we should have several n.xxx.txt files generated;
+        // analyze them and generate n.cookie files
+        analycookie(numconnection,argc,argv);
     }
 
     //clean up
@@ -159,6 +172,49 @@ int main(int argc, char *argv[] )
 
     return 0;
 }
+
+void analycookie(int numconnection,int argc, char *argv[]){
+
+    int accumulater = 0;
+    for(int i = 0; i<numconnection;i++){
+        std::string clientname  = ".client.txt";
+        std::string servername  = ".server.txt";
+        std::string pcapname;
+        std::string cookiename;
+        std::string buffer = argv[argc-1];
+
+        for(int k = 0; k<buffer.length()-5;k++){
+            pcapname = pcapname + buffer[k];
+        }
+        clientname = std::to_string(i+1) + "." +pcapname + clientname;
+        servername = std::to_string(i+1) + "." +pcapname + servername;
+
+        std::ifstream server(servername);
+
+        std::string line;
+        //Write the message headers and body:
+        // the message contains: "Set-Cookie: " 
+        int counter = 1;
+        while(getline(server,line)){
+
+            std::stringstream st;
+
+            if(line.find("Set-Cookie: ")!=std::string::npos){
+                cookiename = std::to_string(counter+accumulater) + ".cookie";
+                line.erase(0,4);
+                st<<line<<"\n";
+                std::ofstream myfile(cookiename);
+                std::string data = st.str();
+                myfile<<data;
+                myfile.close();
+                counter++;
+            }
+        }
+        accumulater = counter;
+        server.close();
+    }
+}
+
 void email_traffic(int numconnection,int argc, char *argv[]){
     for(int i = 0; i<numconnection;i++){
         std::stringstream st;
@@ -210,7 +266,7 @@ void email_traffic(int numconnection,int argc, char *argv[]){
         //451 – The command has been aborted due to a server error. (on their side)
         //452 – The command has been aborted because the server has insufficient system storage.
         
-        //here we consider the message is recieved if there is a 250 after 354 and following by 221 
+        //here we consider the message is recieved if there is a 250/251/252 after 354 and following by 221 
         std::string linebuffer;
         std::string linebuffer2;
 
@@ -275,7 +331,7 @@ void email_traffic(int numconnection,int argc, char *argv[]){
     }
 }
 
-int stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int argc, char *argv[],char errbuf[PCAP_ERRBUF_SIZE]){
+int stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int argc, char *argv[],char errbuf[PCAP_ERRBUF_SIZE],bool stmp){
     //source ip source port, dest ip and dest port uniquely define a TCP connection
     unsigned long sip;
     unsigned long dip;
@@ -330,7 +386,7 @@ int stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int arg
                     &TCPsize,&Payload_size,&Total_size);
 
             //filter the port on 25 or 587 for stmp
-            if(s_port ==25 || d_port ==25 || s_port ==587 || d_port ==587){
+            if((s_port ==25 || d_port ==25 || s_port ==587 || d_port ==587) || !stmp){
                 bool new_connection = true;
 
                 for(int i = 0; i<connec_list.size();i++){
@@ -409,9 +465,6 @@ int stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int arg
 
         packet_counter++;
     }
-    std::cout<<"# of responder  = "<< resp_full_list.size()<<std::endl;
-    std::cout<<"# of initiator  = "<< init_full_list.size()<<std::endl;
-    std::cout<<"# of connction  = "<< connec_list.size()<<std::endl;
 
     // Now we know how many conections and the basic info about intiator and responder, 
     // next we redo the loop to analysis it
@@ -576,8 +629,6 @@ int stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int arg
         remodul_init_full_list.push_back(remodul_init_packet_list);
         idropnum_list.push_back(idropnum);
         iclosed_list.push_back(closed);
-        std::cout<<g+1<<"th "<<"initiator has "<<idropnum<<" duplicated packet to drop"<<std::endl;
-        std::cout<<g+1<<"th "<<"initiator closed?  "<<closed<<" (1->yes; 0->no;)"<<std::endl;
     }
     // drop the dulpicated packet in responser direction
 
@@ -664,8 +715,6 @@ int stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int arg
         remodul_resp_full_list.push_back(remodul_resp_packet_list);
         rdropnum_list.push_back(rdropnum);
         rclosed_list.push_back(closed);
-        std::cout<<g+1<<"th "<<"responder has "<<rdropnum<<" duplicated packet to drop"<<std::endl;
-        std::cout<<g+1<<"th "<<"responder closed?  "<<closed<<" (1->yes; 0->no;)"<<std::endl;
     }
 
     //// ---------- Finishing Remove the duplicate packet and drop the ones are not ACKed ---------------------------
@@ -1529,28 +1578,28 @@ void get_tcpconnectinfo(const struct pcap_pkthdr header,const u_char *packet,uns
     *TCPsize = tcp_seg_len;
     *Payload_size = payload_size;
     *Total_size = size;
-    
-    /** printf("IP Source address         :%s\n", inet_ntoa(source.sin_addr)); */
-    /** printf("IP Destination address    :%s\n", inet_ntoa(dest.sin_addr)); */
-    //printf("RST    :%lu\n", *rst);
 }
 
 void write_dataASC(const u_char * data , int Size,FILE *f){
     for(int i=0 ; i < Size ; i++){
-        if(data[i] == 9 ||(data[i]>=32 && data[i]<=128)){
+        if(data[i]>=32 && data[i]<=128){
             fprintf(f, "%c",(unsigned char)data[i]); //if its a number or alphabet
         }
         if(data[i]==13){
             fprintf(f, "\n"); 
         }
+        if(data[i]==9){
+            fprintf(f, "\t");
+        }
     }
 }
 void write_data(const u_char * data , int Size,FILE *f){
-    int i , j;
-    for(i=0 ; i < Size ; i++){
+    //direcly derived from online source
+    //http://www.binarytides.com/packet-sniffer-code-c-libpcap-linux-sockets/
+    for(int i=0 ; i < Size ; i++){
         if( i!=0 && i%16==0){
             fprintf(f, "         ");
-            for(j=i-16 ; j<i ; j++){
+            for(int j=i-16 ; j<i ; j++){
                 if(data[j]>=32 && data[j]<=128)
                     fprintf(f, "%c",(unsigned char)data[j]); //if its a number or alphabet
 
@@ -1563,13 +1612,13 @@ void write_data(const u_char * data , int Size,FILE *f){
         fprintf(f," %02X",(unsigned int)data[i]);
 
         if( i==Size-1){
-            for(j=0;j<15-i%16;j++){
+            for(int j=0;j<15-i%16;j++){
                 fprintf(f, "   "); //extra spaces
             }
 
             fprintf(f,"         ");
 
-            for(j=i-i%16 ; j<=i ; j++){
+            for(int j=i-i%16 ; j<=i ; j++){
                 if(data[j]>=32 && data[j]<=128){
                     fprintf(f, "%c",(unsigned char)data[j]);
                 }
