@@ -13,6 +13,6 @@
 *.initiator
 *.responder
 *.txt
-
+*.mail
 meta/*
 initiator/*

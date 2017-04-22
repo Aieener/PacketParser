@@ -5,22 +5,24 @@
  *Penn id 31295008
  *2017.3.26 - 2017.4.3: part1
  *2017.4.3  - 2017.4.12: part2 I changed from c to cpp due to usage of <vector>
+ *
  *----------------------------------------------------------
  * void write_data(const u_char * data , int Size,FILE *f);    // the one I used for part2
  * void write_dataASC(const u_char * data , int Size,FILE *f); // modified version for part3
  *---------------------------------------------------------- 
- * While keeping my original part 2's printing method, 
+ * While keeping my original part 2's printing method for part 2, 
+ * (the one prints both ASCii and hex with all tcp payload)
  * I have made a modified version of the printing method and use it
- * in part 3, so the payload prints data in the same way
+ * for part 3, so the payload STMP data will be prints in the same format
  * as the given example stmp.client.txt and stmp.server.txt
  *----------------------------------------------------------
- *2017.4.13 - 2017.4.24: part3, this part has assumed we have only 1 connection and 
- *                       will first print two txt files named <name.client.txt>
- *                       and <name.server.txt> in the format
+ *
+ *2017.4.13 - 2017.4.24: part3, this part will first print two txt files 
+ *                       named <n.name.client.txt and <n.name.server.txt> in the format
  *                       that our TA Kyle provided to us, i.e. stmp.client.txt
  *                       
- *                       Then the program will analysis that txt file and extract
- *                       infomation for STMP from it.
+ *                       Then the program will analysis those txt file and extract
+ *                       information for STMP from it.
  */
 
 #include <pcap.h>
@@ -40,6 +42,9 @@
 #include <vector>
 #include <array>
 #include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
 #include <algorithm>
 
 ///-----------------------
@@ -50,8 +55,8 @@ void parsing_packets(const struct pcap_pkthdr header,const u_char *packet);
 void tcp_flows(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int argc, char *argv[],char errbuf[PCAP_ERRBUF_SIZE]);
 
 // part 3: Due 4/24/17
-void stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int argc, char *argv[],char errbuf[PCAP_ERRBUF_SIZE]);
-void email_traffic();
+int stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int argc, char *argv[],char errbuf[PCAP_ERRBUF_SIZE]);
+void email_traffic(int numconnection,int argc, char *argv[]);
 ///-----------------------
 
 // ------ pseudo_header for TcpCheckSum -----------
@@ -97,8 +102,8 @@ int main(int argc, char *argv[] )
     char errbuf[PCAP_ERRBUF_SIZE];
     pcap_t *pf;
     struct bpf_program fp;
-    //char select_mail[] = "port 25 or port 587";
-    char select_mail[] = "port 25";
+    char select_mail[] = "port 25 or port 587";
+    //char select_mail[] = "port 25";
     struct pcap_pkthdr header;
     const u_char *packet;
 
@@ -140,34 +145,13 @@ int main(int argc, char *argv[] )
 
     // -------------------Part 3 ---------------------------
     if(argc ==3 && !strcmp(argv[argc-2],"-m")){
-    // first set filter on port 25 or port 587 for stmp
-/*        if( pcap_compile(pf, &fp, select_mail, 0, 0 ) == -1 ) {*/
-            //fprintf( stderr, "BPF compile errors on %s: %s\n",
-                    //select_mail, pcap_geterr(pf) );
-            //exit(1);
-        //}
+        // basically redo part 2 with filtering port number to be 25 or 587
+        // and return the total number of connections;
+        int numconnection = stmp_flow(pf, header,packet,argc,argv,errbuf);
 
-        //if( pcap_setfilter( pf, &fp ) == -1){
-            //fprintf( stderr, "Can't install filter '%s': %s\n", select_mail,
-                    //pcap_geterr(pf) );
-            //exit(1);
-        //}
-
-
-/*         int packet_counter = 1; */
-        // while((packet = pcap_next(pf, &header)) != NULL){
-        //     printf("----------------------------------\n");
-        //     printf("Packet number: %d\n",packet_counter);
-        //     printf("----------------------------------\n");
-        //     parsing_packets(header,packet);
-        //     packet_counter++;
-        /* } */
-
-        //pcap_freecode(&fp);
-        
-
-        // basically redo part 2 first 
-        stmp_flow(pf, header,packet,argc,argv,errbuf);
+        // now we should have several n.xxx.stmp.txt file generated;
+        // anaylize them and generate n.mail files
+        email_traffic(numconnection,argc,argv);
     }
 
     //clean up
@@ -175,8 +159,102 @@ int main(int argc, char *argv[] )
 
     return 0;
 }
+void email_traffic(int numconnection,int argc, char *argv[]){
+    for(int i = 0; i<numconnection;i++){
+        std::stringstream st;
+        std::string clientname  = ".client.txt";
+        std::string servername  = ".server.txt";
+        std::string pcapname;
+        std::string mailname;
+        std::string buffer = argv[argc-1];
 
-void stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int argc, char *argv[],char errbuf[PCAP_ERRBUF_SIZE]){
+        for(int k = 0; k<buffer.length()-5;k++){
+            pcapname = pcapname + buffer[k];
+        }
+        clientname = std::to_string(i+1) + "." +pcapname + clientname;
+        servername = std::to_string(i+1) + "." +pcapname + servername;
+        mailname = std::to_string(i+1) + ".mail";
+
+        std::ifstream client(clientname);
+        std::ifstream server(servername);
+
+        // first extract Email address of sender and recipient (since ip is not in message)
+        // "you can choose to either report the ip addresses of the client and server,
+        //  or the sender and recipient email addresses parsed from the SMTP messages."
+        std::string line;
+        while(getline(client,line)){
+            if(line.find("MAIL FROM: ")!=std::string::npos){
+                st<<"Sender's Email address: "<<line<<"\n";
+            }
+            else if(line.find("RCPT TO: ") != std::string::npos){
+                st<<"Recipient's Email address: "<<line<<"\n";
+            }
+        }
+        bool accept = false;
+
+        //next check if the message was accepted:
+        //Check is DATA is accepted by look at the server's response;
+        //
+        //According to the SMTP protocal:
+        //211 – A system status message.
+        //214 – A help message for a human reader follows.
+        //220 – SMTP Service ready.
+        //221 – Service closing.
+        //
+        //250 – Requested action taken and completed.
+        //251 – The recipient is not local to the server, but the server will accept and forward the message.
+        //252 – The recipient cannot be VRFYed, but the server accepts the message and attempts delivery.
+        //
+        //354 – Start message input and end with .. This indicates that the server is ready to accept the message itself
+        //421 – The service is not available and the connection will be closed.
+        //450 – The requested command failed because the user’s mailbox was unavailable (such as being full). Try again later.
+        //451 – The command has been aborted due to a server error. (on their side)
+        //452 – The command has been aborted because the server has insufficient system storage.
+        
+        std::string linebuffer;
+        while(getline(server,line)){
+            if(line.find("221 ") != std::string::npos){
+                if(linebuffer.find("250 ") != std::string::npos ||
+                        linebuffer.find("251 ") != std::string::npos||
+                        linebuffer.find("252 ") != std::string::npos){
+                    accept = true;
+                }
+            }
+            linebuffer = line;
+        }
+        if(accept){
+            st<<"The message is accepted by the server\n";
+        }
+        else{
+            st<<"The message is rejected by the server\n";
+        }
+
+        std::ifstream clientb(clientname);
+        //Last, write the message headers and body:
+        bool start = false;
+        st<<"Blow is the message headers and body:\n\n";
+        // the message between 'DATA' to '.'
+        while(getline(clientb,line)){
+            if(line.find("DATA")!=std::string::npos){
+                start = true;
+            }
+            if(line == "."){
+                st<<line<<"\n";
+                start = false;
+            }
+            if(start){
+                st<<line<<"\n";
+            }
+        }
+        
+        std::ofstream myfile(mailname);
+        std::string data = st.str();
+        myfile<<data;
+        myfile.close();
+    }
+}
+
+int stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int argc, char *argv[],char errbuf[PCAP_ERRBUF_SIZE]){
     //source ip source port, dest ip and dest port uniquely define a TCP connection
     unsigned long sip;
     unsigned long dip;
@@ -215,7 +293,6 @@ void stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int ar
     unsigned long rseq_ref = 0;
     std::vector<unsigned long> iseq_reflist;
     std::vector<unsigned long> rseq_reflist;
-    unsigned long connection_count = 0;
 
     std::vector<const u_char *> packetlist;
 
@@ -231,76 +308,79 @@ void stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int ar
             get_tcpconnectinfo(header,packet,&sip,&dip,&s_port,&d_port,&sequence,&ack_seq,&ack,&syn,&fin,&rst,
                     &TCPsize,&Payload_size,&Total_size);
 
-            bool new_connection = true;
+            //filter the port on 25 or 587 for stmp
+            if(s_port ==25 || d_port ==25 || s_port ==587 || d_port ==587){
+                bool new_connection = true;
 
-            for(int i = 0; i<connec_list.size();i++){
-                // source ip, dest ip, source port and dest port uniquely defines a connection
-                // check if this packet's identity matches wish any exist connection
-                int counter = 0;
-                for(int j = 0; j<4;j++){
-                    if(sip == connec_list[i][j]){
-                        counter++;
+                for(int i = 0; i<connec_list.size();i++){
+                    // source ip, dest ip, source port and dest port uniquely defines a connection
+                    // check if this packet's identity matches wish any exist connection
+                    int counter = 0;
+                    for(int j = 0; j<4;j++){
+                        if(sip == connec_list[i][j]){
+                            counter++;
+                        }
+                        if(dip == connec_list[i][j]){
+                            counter++;
+                        }
+                        if(s_port == connec_list[i][j]){
+                            counter++;
+                        }
+                        if(d_port == connec_list[i][j]){
+                            counter++;
+                        }
                     }
-                    if(dip == connec_list[i][j]){
-                        counter++;
-                    }
-                    if(s_port == connec_list[i][j]){
-                        counter++;
-                    }
-                    if(d_port == connec_list[i][j]){
-                        counter++;
+                    if(counter ==4){
+                        new_connection = false;
                     }
                 }
-                if(counter ==4){
-                    new_connection = false;
+
+                if(new_connection &&syn ==1){
+                    //------------- initiator initiator ---------------------
+                    iseq_ref = sequence;
+                    iseq_reflist.push_back(iseq_ref); //record the reference sequence # as to cal relatice reference # later
+                    seq_relative = 0; // the initial sequence is 0 for initiator
+                    ack_relative = 0; // the initial ack_seq is 0 for initiator
+
+                    std::array<unsigned long, 14> init_packet = {{sip,dip,s_port,d_port,seq_relative,ack_relative,
+                        ack,syn,fin,TCPsize,packet_counter,rst,Payload_size,Total_size}};
+
+                    std::vector<std::array<unsigned long,14> > init_packetinfo_list; // a list to store the infomation per connection
+                    init_packetinfo_list.push_back(init_packet); 
+
+                    init_full_list.push_back(init_packetinfo_list); 
+                    // ----------- connection initiation --------
+                    // the structure of connection:[initiator_ip; responder_ip;initiator_port; responder_port;
+                    // num_sent_by_i;  num_sent_by_r;   num_byte_sent_by_i;   num_byte_sent_by_r;  num_ofdul_i; num_ofdul_r;
+                    // closed]
+                    std::array<unsigned long, 11> connect = {{sip,dip,s_port,d_port,0,0,0,0,0,0,0}};
+                    connec_list.push_back(connect);
                 }
-            }
+                // now handle the responders
 
-            if(new_connection &&syn ==1){
-                //------------- initiator initiator ---------------------
-                iseq_ref = sequence;
-                iseq_reflist.push_back(iseq_ref); //record the reference sequence # as to cal relatice reference # later
-                seq_relative = 0; // the initial sequence is 0 for initiator
-                ack_relative = 0; // the initial ack_seq is 0 for initiator
+                for(int i = 0; i<init_full_list.size();i++){
+                    if(ack == 1 && syn == 1){
+                        //make sure it is the first piece of message of the responder;
+                        if(sip == init_full_list[i][0][1] && s_port == init_full_list[i][0][3] &&
+                                dip == init_full_list[i][0][0] && d_port == init_full_list[i][0][2]){
+                            // if the sip = dip of initator and s_port = d_port of initiator, 
+                            // the dip = sip of initator and d_port = s_port of initiator, 
+                            // this means it is the responder for ith connection's initator
 
-                std::array<unsigned long, 14> init_packet = {{sip,dip,s_port,d_port,seq_relative,ack_relative,
-                    ack,syn,fin,TCPsize,packet_counter,rst,Payload_size,Total_size}};
+                            //------------- responder initiator ---------------------
+                            rseq_ref = sequence;
+                            rseq_reflist.push_back(rseq_ref); //record the reference sequence # as to cal relative reference # later
+                            seq_relative = 0; // the initial sequence is 0 for responder
+                            ack_relative = 1; // the initial ack_seq is 1 for responder
 
-                std::vector<std::array<unsigned long,14> > init_packetinfo_list; // a list to store the infomation per connection
-                init_packetinfo_list.push_back(init_packet); 
+                            std::array<unsigned long, 14> resp_packet = {{sip,dip,s_port,d_port,seq_relative,ack_relative,
+                                ack,syn,fin,TCPsize,packet_counter,rst,Payload_size,Total_size}};
 
-                init_full_list.push_back(init_packetinfo_list); 
-                // ----------- connection initiation --------
-                // the structure of connection:[initiator_ip; responder_ip;initiator_port; responder_port;
-                // num_sent_by_i;  num_sent_by_r;   num_byte_sent_by_i;   num_byte_sent_by_r;  num_ofdul_i; num_ofdul_r;
-                // closed]
-                std::array<unsigned long, 11> connect = {{sip,dip,s_port,d_port,0,0,0,0,0,0,0}};
-                connec_list.push_back(connect);
-            }
-            // now handle the responders
+                            std::vector<std::array<unsigned long,14> > resp_packetinfo_list; // a list to store the infomation per connection
+                            resp_packetinfo_list.push_back(resp_packet); 
 
-            for(int i = 0; i<init_full_list.size();i++){
-                if(ack == 1 && syn == 1){
-                    //make sure it is the first piece of message of the responder;
-                    if(sip == init_full_list[i][0][1] && s_port == init_full_list[i][0][3] &&
-                            dip == init_full_list[i][0][0] && d_port == init_full_list[i][0][2]){
-                        // if the sip = dip of initator and s_port = d_port of initiator, 
-                        // the dip = sip of initator and d_port = s_port of initiator, 
-                        // this means it is the responder for ith connection's initator
-
-                        //------------- responder initiator ---------------------
-                        rseq_ref = sequence;
-                        rseq_reflist.push_back(rseq_ref); //record the reference sequence # as to cal relative reference # later
-                        seq_relative = 0; // the initial sequence is 0 for responder
-                        ack_relative = 1; // the initial ack_seq is 1 for responder
-
-                        std::array<unsigned long, 14> resp_packet = {{sip,dip,s_port,d_port,seq_relative,ack_relative,
-                            ack,syn,fin,TCPsize,packet_counter,rst,Payload_size,Total_size}};
-
-                        std::vector<std::array<unsigned long,14> > resp_packetinfo_list; // a list to store the infomation per connection
-                        resp_packetinfo_list.push_back(resp_packet); 
-
-                        resp_full_list.push_back(resp_packetinfo_list);
+                            resp_full_list.push_back(resp_packetinfo_list);
+                        }
                     }
                 }
             }
@@ -594,7 +674,7 @@ void stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int ar
             pcapname = pcapname + buffer[k];
         }
 
-        filenamestr = pcapname + filenamestr;
+        filenamestr = std::to_string(connec_list.size()) + "." +pcapname + filenamestr;
         const char *filename = filenamestr.c_str();
 
         u_char *payload;                    
@@ -654,7 +734,7 @@ void stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int ar
             pcapname = pcapname + buffer[k];
         }
 
-        filenamestr = pcapname + filenamestr;
+        filenamestr = std::to_string(connec_list.size()) + "." +pcapname + filenamestr;
         const char *filename = filenamestr.c_str();
 
 
@@ -704,6 +784,7 @@ void stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int ar
         }
         fclose(f1);
     }
+    return connec_list.size();
 }
 
 void tcp_flows(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int argc, char *argv[],char errbuf[PCAP_ERRBUF_SIZE]){
@@ -1435,8 +1516,11 @@ void get_tcpconnectinfo(const struct pcap_pkthdr header,const u_char *packet,uns
 
 void write_dataASC(const u_char * data , int Size,FILE *f){
     for(int i=0 ; i < Size ; i++){
-        if(data[i]==13 || data[i] == 9 ||(data[i]>=32 && data[i]<=128)){
+        if(data[i] == 9 ||(data[i]>=32 && data[i]<=128)){
             fprintf(f, "%c",(unsigned char)data[i]); //if its a number or alphabet
+        }
+        if(data[i]==13){
+            fprintf(f, "\n"); 
         }
     }
 }
