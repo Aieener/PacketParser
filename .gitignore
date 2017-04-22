@@ -12,6 +12,7 @@
 *.meta
 *.initiator
 *.responder
+*.txt
 
 meta/*
 initiator/*
