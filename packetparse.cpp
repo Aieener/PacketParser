@@ -3,8 +3,8 @@
  *Project2
  *Yuding Ai
  *Penn id 31295008
- *2017.3.26 - 2017.4.3: part1
- *2017.4.3  - 2017.4.12: part2 I changed from c to cpp due to usage of <vector>
+ *2017.3.26 - 2017.4.3 : Part1
+ *2017.4.3  - 2017.4.12: Part2 I changed from c to cpp due to usage of <vector>
  *
  *----------------------------------------------------------
  * void write_data(const u_char * data , int Size,FILE *f);    // the one I used for part2
@@ -13,18 +13,19 @@
  * While keeping my original part 2's printing method for part 2, 
  * (the one prints both ASCii and hex with all tcp payload)
  * I have made a modified version of the printing method and use it
- * for part 3, so the payload STMP data will be prints in the same format
- * as the given example stmp.client.txt and stmp.server.txt
+ * for part 3 and extra credit, so the payload STMP data will be 
+ * prints in the same format as the given example stmp.client.txt
+ * and stmp.server.txt
  *----------------------------------------------------------
  *
- *2017.4.13 - 2017.4.24: part3, this part will first print two txt files 
+ *2017.4.13 - 2017.4.24: Part3, this part will first print two txt files 
  *                       named <n.name.client.txt and <n.name.server.txt> in the format
  *                       that our TA Kyle provided to us, i.e. stmp.client.txt
  *                       
  *                       Then the program will analysis those txt file and extract
  *                       information for STMP from it.
  *                       
- *                       extra credit: extract cookies from HTTP connections
+ *                       Extra credit: extract cookies from HTTP connections
  */
 
 #include <pcap.h>
@@ -105,9 +106,6 @@ int main(int argc, char *argv[] )
 {
     char errbuf[PCAP_ERRBUF_SIZE];
     pcap_t *pf;
-    struct bpf_program fp;
-    char select_mail[] = "port 25 or port 587";
-    //char select_mail[] = "port 25";
     struct pcap_pkthdr header;
     const u_char *packet;
 
@@ -175,7 +173,7 @@ int main(int argc, char *argv[] )
 
 void analycookie(int numconnection,int argc, char *argv[]){
 
-    int accumulater = 0;
+    int counter = 1;
     for(int i = 0; i<numconnection;i++){
         std::string clientname  = ".client.txt";
         std::string servername  = ".server.txt";
@@ -192,15 +190,13 @@ void analycookie(int numconnection,int argc, char *argv[]){
         std::ifstream server(servername);
 
         std::string line;
-        //Write the message headers and body:
+        // detect the Cookies:
         // the message contains: "Set-Cookie: " 
-        int counter = 1;
         while(getline(server,line)){
-
             std::stringstream st;
 
             if(line.find("Set-Cookie: ")!=std::string::npos){
-                cookiename = std::to_string(counter+accumulater) + ".cookie";
+                cookiename = std::to_string(counter) + ".cookie";
                 line.erase(0,4);
                 st<<line<<"\n";
                 std::ofstream myfile(cookiename);
@@ -210,7 +206,6 @@ void analycookie(int numconnection,int argc, char *argv[]){
                 counter++;
             }
         }
-        accumulater = counter;
         server.close();
     }
 }
@@ -728,7 +723,7 @@ int stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int arg
         int rdropnum = rdropnum_list[i];
         //std::cout << rclosed << iclosed<<std::endl;
         analyconnection(connec_list[i],init_full_list[i], resp_full_list[i],idropnum,rdropnum,rclosed,iclosed);
-        write_meta(connec_list[i],i+1);
+        // write_meta(connec_list[i],i+1);
     }
 
     //=====================================================================
@@ -744,7 +739,7 @@ int stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int arg
             pcapname = pcapname + buffer[k];
         }
 
-        filenamestr = std::to_string(connec_list.size()) + "." +pcapname + filenamestr;
+        filenamestr = std::to_string(inidx + 1) + "." +pcapname + filenamestr;
         const char *filename = filenamestr.c_str();
 
         u_char *payload;                    
@@ -804,7 +799,7 @@ int stmp_flow(pcap_t *pf, struct pcap_pkthdr header,const u_char *packet,int arg
             pcapname = pcapname + buffer[k];
         }
 
-        filenamestr = std::to_string(connec_list.size()) + "." +pcapname + filenamestr;
+        filenamestr = std::to_string(inidx + 1) + "." +pcapname + filenamestr;
         const char *filename = filenamestr.c_str();
 
 
