@@ -1,5 +1,5 @@
 # PacketParser
-This is a course Project from class _CIS 553: Networked systems_ at Upenn, where we have wrote a program to parse and interpret captured Ethernet traffic files (`.pcap` file) containing IP datagrams (UDP and TCP), and stores captured email messages sent in that traffic into files. (Using C++)
+This is a course Project from class _CIS 553: Networked systems_ at Upenn, where we have wrote a program to parse and interpret captured Ethernet traffic (`.pcap` file) containing IP datagrams (UDP and TCP), and stores captured email messages sent in that traffic into files. (Using C++)
 ## Installation
 First download/clone it:
 ```
