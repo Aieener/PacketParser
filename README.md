@@ -34,7 +34,7 @@ In the terminal, it will display the following information of each packet from t
 $ ./packetparse -t <target.pcap>
 ```
 It will produce n x 3 files in the working directory, where n stands for the number of connections.
-These are:
+These are:__
 **metadata**: named as `<n.meta>` and contains the following infomation :
 - Initiator IP address
 - Initiator port
@@ -48,7 +48,7 @@ These are:
 - Number of duplicate packets sent by responder       
 - Whether the connection is closed     
 
-**Initiator**: Data from Initiator names as `<n.initiator>` and contains: All the ACKed and non-duplicate TCP payload data in the connection sent from the initiator to the responder.
+**Initiator**: Data from Initiator names as `<n.initiator>` and contains: All the ACKed and non-duplicate TCP payload data in the connection sent from the initiator to the responder.__
 **Responder**: Data from Responder names as `<n.responder>` and contains: All the ACKed and non-duplicate TCP payload data in the connection sent from the responder to the initiator.
 
 ### Option 3, run it as: 
